@@ -32,6 +32,7 @@ class FakeBiscuit:
         self.reply, self.mac = reply, mac
         self.firmware, self.texts, self.acks, self.records, self.heartbeats = [], [], [], [], 0
         self.assigned = False
+        self.seq = 0
 
     def heard(self, dst, payload, out):
         kind, counter, text = biscuit.read_message(payload) if payload[4] != biscuit.WARDRIVE_BATCH else \
@@ -58,8 +59,10 @@ class FakeBiscuit:
                 self.records.append(body[at:at + 11 + size])
                 at += 11 + size
 
-    def say(self, payload):
-        return radiotap(2437, -40) + biscuit.action_frame(PAGER, self.mac, 1, payload, nonce=b"1234")
+    def say(self, payload, seq=None):
+        self.seq += 1
+        return radiotap(2437, -40) + biscuit.action_frame(PAGER, self.mac, self.seq if seq is None else seq, payload,
+                                                          nonce=b"1234")
 
 
 class FakeRadio:
@@ -171,7 +174,7 @@ def test_node_reports_as_pager_and_sends_only_what_codehedges_node_sends():
     assert kinds <= {biscuit.CORE_REQUEST, biscuit.FW_VERSION, biscuit.HEARTBEAT, biscuit.ROLE_ACK,
                      biscuit.WARDRIVE_BATCH, biscuit.CONFIG_ACK, biscuit.STOP_ACK}
     assert fake.texts == []
-    assert fake.firmware == [b"Pager:v1.1.0"] * 3
+    assert len(fake.firmware) >= 3 and set(fake.firmware) == {b"Pager:v1.1.0"}
 
 
 def test_node_scans_only_6ghz():
@@ -392,3 +395,23 @@ def test_a_network_is_sent_again_no_sooner_than_5_seconds():
     seen.add(NET6, 37, -55, 4, b"a")
     taken = seen.take()
     assert len(taken) == 1 and taken[0][1][8] == (-55) & 0xff
+
+
+def test_the_pager_name_is_sent_again_so_the_biscuit_keeps_it():
+    fake = FakeBiscuit()
+    node, _, _ = run_node([fake], limit=70)
+    assert len(fake.firmware) >= 5 and set(fake.firmware) == {b"Pager:v1.1.0"}
+    before = len(fake.firmware)
+    node.handle(BISCUIT, biscuit.ROLE_ASSIGN, 0, b"\x01TOKN")
+    node.check_in(node.clock())
+    assert len(fake.firmware) == before + 1
+
+
+def test_a_repeated_frame_is_handled_once():
+    fake = FakeBiscuit()
+    node, radio, _ = run_node([fake], limit=1)
+    acks = len([p for _, p, _ in radio.sent if p[4] == biscuit.ROLE_ACK])
+    again = fake.say(biscuit.message(biscuit.ROLE_ASSIGN, 0, b"\x01TOKN"), seq=900)
+    node.frame(again)
+    node.frame(again)
+    assert len([p for _, p, _ in radio.sent if p[4] == biscuit.ROLE_ACK]) == acks + 1

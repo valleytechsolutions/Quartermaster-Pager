@@ -79,7 +79,8 @@ and adds it.
 While node mode runs:
 
 - The Pager comes up on the Biscuit as a Pager node (`Pager:v1.1.0`), and it sends only what CodeHedge's payload
-  sends, with the same timings.
+  sends, with the same timings. It says `Pager:v1.1.0` again when the Biscuit adds it or gives it a job, and every
+  30 s, so the Biscuit always shows it as a Pager.
 - It scans 6 GHz only: the 15 main channels on three sweeps and all 59 on the fourth, 110 ms each. About once a
   second it goes back to 2.4 GHz channel 6 for 150 ms to talk to the Biscuit, and it never reports a network heard
   there.

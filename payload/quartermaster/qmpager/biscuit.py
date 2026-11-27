@@ -41,7 +41,7 @@ SEND_PER_VISIT = 12
 PSC = tuple(range(5, 230, 16))
 EVERY = tuple(range(1, 234, 4))
 DWELL, SCAN_SLOT, HOME_SLOT = 0.11, 0.9, 0.15
-REQUEST_GAP, HEARTBEAT_GAP, FIRMWARE_GAP = 0.3, 3.0, 2.0
+REQUEST_GAP, HEARTBEAT_GAP, FIRMWARE_GAP, FIRMWARE_AGAIN = 0.3, 3.0, 2.0, 30.0
 RESEND_SECONDS = 5.0
 LOST_SECONDS = 20.0
 ACK_WINDOW = 0.05
@@ -287,6 +287,7 @@ class Node:
         self.channel = None
         self.next = {"request": 0.0, "firmware": 0.0, "heartbeat": 0.0, "status": 0.0}
         self.tune_failures = 0
+        self.seen = {}
 
     def send(self, dst, payload):
         if self.radio.send(dst, payload):
@@ -313,9 +314,15 @@ class Node:
         action = read_action(fr)
         if action is None:
             return
-        dst, src, _, payload = action
+        dst, src, seq, payload = action
         if src == self.radio.mac or dst not in (self.radio.mac, BROADCAST):
             return
+        now = self.clock()
+        if now - self.seen.get((src, seq), -9.0) < 2.0:
+            return
+        self.seen[(src, seq)] = now
+        if len(self.seen) > 512:
+            self.seen = {k: v for k, v in self.seen.items() if now - v < 2.0}
         got = read_message(payload)
         if got is not None:
             self.handle(src, *got)
@@ -333,7 +340,11 @@ class Node:
         now = self.clock()
         if kind == CORE_REPLY:
             # The Biscuit that answers takes the Pager, as with CodeHedge's node: adding it is done on the Biscuit.
-            if self.core is not None or (b"wdbatch=" not in text and b"nodecfg=" not in text):
+            if b"wdbatch=" not in text and b"nodecfg=" not in text:
+                return
+            if self.core is not None:
+                if src == self.core:
+                    self.firmware_tries, self.next["firmware"] = 0, now
                 return
             if b"encrypt=1" in text:
                 self.state = SECURE
@@ -353,6 +364,7 @@ class Node:
             else:
                 self.role, token = (text[0] if text else counter & 0xFF), b""
             self.send(self.core, message(ROLE_ACK, self.role, token))
+            self.firmware_tries, self.next["firmware"] = 0, now
             if self.ap6:
                 self.state = SCANNING if self.role == SCAN_ROLE else JOINED
         elif kind == CONFIG_UPDATE:
@@ -403,10 +415,10 @@ class Node:
             self.last_ack = self.clock()
 
     def check_in(self, now):
-        if self.firmware_tries < 3 and now >= self.next["firmware"]:
+        if now >= self.next["firmware"]:
             self.send(self.core, message(FW_VERSION, 0, FIRMWARE))
             self.firmware_tries += 1
-            self.next["firmware"] = now + FIRMWARE_GAP
+            self.next["firmware"] = now + (FIRMWARE_GAP if self.firmware_tries < 3 else FIRMWARE_AGAIN)
         if now >= self.next["heartbeat"]:
             self.send(self.core, message(HEARTBEAT, self.hb))
             self.hb += 1

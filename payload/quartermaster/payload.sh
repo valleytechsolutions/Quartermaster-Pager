@@ -2,7 +2,7 @@
 # Title: Quartermaster
 # Author: Valleytech Solutions
 # Description: Wi-Fi, Bluetooth and LoRa mesh wardriver with WiGLE logs, uploads, Drive Alerts for Flock, Axon and Meta glasses, Recon, and Biscuit 6 GHz node mode
-# Version: 1.1.0
+# Version: 1.1.1
 # Category: Reconnaissance
 #
 # Options: none needed. Upload keys are entered on the Pager or from a phone, never in this file.
