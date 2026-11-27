@@ -1,5 +1,7 @@
 """The Pager's screen: a 222x480 RGB565 panel, drawn on as a 480x222 landscape screen."""
 
+import os
+
 from PIL import Image
 
 from quartermaster.ui.display import FramebufferDisplay, to_rgb565
@@ -27,25 +29,25 @@ class PagerDisplay(FramebufferDisplay):
             img = img.resize(self.panel)
         return to_rgb565(img)
 
+    def write(self, data):
+        row = self.panel[0] * 2
+        if self.stride != row:
+            data = b"".join(data[y * row:(y + 1) * row].ljust(self.stride, b"\x00") for y in range(self.panel[1]))
+        os.lseek(self.fd, 0, os.SEEK_SET)
+        view = memoryview(data)
+        while view:
+            view = view[os.write(self.fd, view):]
+
     def show(self, img):
         data = self.frame(img)
         if data == self._last:
             return
         self._last = data
-        row = self.panel[0] * 2
-        if self.stride == row:
-            self.map.seek(0)
-            self.map.write(data)
-        else:
-            for y in range(self.panel[1]):
-                self.map.seek(y * self.stride)
-                self.map.write(data[y * row:(y + 1) * row])
+        self.write(data)
 
     def close(self):
         try:
-            self.map.seek(0)
-            self.map.write(b"\x00" * min(self.size, self.stride * self.panel[1]))
+            self.write(bytes(self.panel[0] * self.panel[1] * 2))
             self.map.close()
         finally:
-            import os
             os.close(self.fd)
