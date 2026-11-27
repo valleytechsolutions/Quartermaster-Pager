@@ -88,7 +88,7 @@ fi
 mkdir -p "$QUARTERMASTER_HOME"
 UI_TAKEOVER >/dev/null 2>&1 || { ERROR_DIALOG "Could not take over the Pager screen."; exit 1; }
 DISPLAY_SET=1
-"$PYTHON_BIN" -B -m qmpager >>"$LOG_FILE" 2>&1 &
+"$PYTHON_BIN" -B -m qmpager >"$LOG_FILE" 2>&1 &
 QM_PID=$!
 wait "$QM_PID"
 STATUS=$?
