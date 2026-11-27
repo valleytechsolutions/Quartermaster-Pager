@@ -81,7 +81,7 @@ def main():
         shot("phone-setup")
         qm.press(app, "ESC", "DOWN", "ENTER")
         app.keyboard.type("AID0f1e2d3c")
-        qm.press(app, "TAB", "RIGHT", "RIGHT", "RIGHT")
+        qm.press(app, "RIGHT", "RIGHT", "DOWN")
         shot("keyboard")
         app.open("Recon")
         qm.press(app, "SPACE")

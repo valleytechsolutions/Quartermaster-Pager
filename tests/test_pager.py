@@ -300,3 +300,42 @@ def test_screen_timeout_is_in_settings_and_defaults_to_never():
                             capture_output=True, text=True,
                             env={"QUARTERMASTER_HOME": "/tmp/qm-test", "PATH": "/usr/bin:/bin"})
     assert result.stdout.strip() == "ok", result.stderr
+
+
+def test_keyboard_moves_like_a_keyboard_and_switches_pages():
+    from qmpager.keyboard import Keyboard
+    kb = Keyboard()
+    assert kb.current() == ("char", "q")
+    kb.move("LEFT")
+    assert kb.current() == ("char", "p")
+    for _ in range(3):
+        kb.move("DOWN")
+    assert kb.current()[0] == "done"
+    kb.col = 0
+    assert kb.press() is None and kb.page == "ABC"
+    kb.move("UP")
+    assert kb.current() == ("char", "Z")
+    kb.row, kb.col = 4, 2
+    assert kb.press() == ("type", " ")
+
+
+def test_pager_keyboard_types_deletes_and_saves():
+    from qmpager import wide
+    from quartermaster.ui import screens
+    from quartermaster.ui.keys import Key
+    saved = []
+
+    class App:
+        def pop(self):
+            saved.append("popped")
+    app = App()
+    app.screen = screens.TextInput("KEY", saved.append, secret=True)
+    ui = wide.WideUI()
+    ui.handle(Key("ENTER"), app)
+    ui.handle(Key("RIGHT"), app)
+    ui.handle(Key("ENTER"), app)
+    assert app.screen.value == "qw"
+    ui.handle(Key("ESC"), app)
+    assert app.screen.value == "q"
+    ui.handle(Key("TAB"), app)
+    assert saved == ["popped", "q"]
