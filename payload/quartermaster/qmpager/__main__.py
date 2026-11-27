@@ -35,9 +35,11 @@ def built_in_phys(sys_net="/sys/class/net"):
 def install():
     """Put the Pager's parts in place. Must run before any other part of Quartermaster is imported."""
     os.environ.setdefault("QUARTERMASTER_HOME", str(LOOT))
-    from quartermaster import ble, deepscan, hardware, meshpackets, tones, wigle
+    from quartermaster import ble, deepscan, flasher, hardware, meshpackets, tones, wigle
     from . import aes, ed25519, hci, listen, sound
     wigle.DISPLAY_SIZES["pager"] = "480x222"
+    flasher.DAMAGED = ("Node firmware does not come with the Pager payload. Flash the node from a computer at "
+                       "valleytechsolutions.github.io/Quartermaster/flasher, then plug it into the Pager.")
     ble.BleScanner = hci.HciBleScanner
     deepscan.DeepScan = listen.PagerListen
     deepscan.wanted = lambda cfg: True
@@ -115,12 +117,12 @@ def main(argv=None):
     args = parser.parse_args(argv)
     os.umask(0o077)
     install()
-    from quartermaster import config, faults, hardware, lora, updates_check, wigle
+    from quartermaster import config, faults, hardware, lora, wigle
     from quartermaster.engine import DEFAULT_ROOT
     from quartermaster.gnss import GPS
     from quartermaster.power import Rails
     from quartermaster.ui.app import App, HardwareWatch
-    from . import listen, usblora, wide
+    from . import listen, updates, usblora, wide
     from .buttons import PagerInput
     from .device import Lights
     from .screen import PagerDisplay
@@ -164,7 +166,7 @@ def main(argv=None):
         cleanup.callback(cap.stop)
         app = App(display, keyboard, gps, cfg, root=DEFAULT_ROOT, splash=not args.no_splash,
                   hw=HardwareWatch(gps_ports=gps_ports), cap=cap,
-                  updates=updates_check.check_pi)
+                  updates=updates.check_pager)
         app.square = wide.WideUI()
         if isinstance(app.player, BuzzerPlayer):
             app.player.vibrate = lambda: app.cfg.get("drive_alert_tones", True)

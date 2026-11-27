@@ -7,10 +7,10 @@
 #
 # Options: none needed. Upload keys are entered on the Pager or from a phone, never in this file.
 # Logs: /root/loot/quartermaster
-# Needs: python3 and python3-pillow from the Pager's package feed. Quartermaster asks before installing them.
+# Needs: python3, python3-pillow and python3-pyserial from the Pager's package feed. Quartermaster asks before installing them.
 # Controls: D-pad moves, green opens, hold green for actions, red goes back, hold red for 2 seconds to leave.
 
-PACKAGES="python3 python3-pillow"
+PACKAGES="python3 python3-pillow python3-pyserial"
 LAUNCH_DIR="$(cd "$(dirname "$0")" && pwd)"
 export PATH="/mmc/usr/bin:/mmc/usr/sbin:/mmc/bin:/mmc/sbin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 export LD_LIBRARY_PATH="/mmc/usr/lib:/mmc/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
@@ -37,14 +37,14 @@ find_python() {
 
 ready() {
     find_python || return 1
-    "$PYTHON_BIN" -B -c 'import PIL.Image, json, mmap, fcntl, ssl, multiprocessing, http.server, gzip, csv, zlib' \
+    "$PYTHON_BIN" -B -c 'import PIL.Image, serial, json, mmap, fcntl, ssl, multiprocessing, http.server, gzip, csv, zlib' \
         >/dev/null 2>&1
 }
 
 install_packages() {
-    response=$(CONFIRMATION_DIALOG "Quartermaster needs Python 3 and Pillow.\n\nInstall $PACKAGES to the Pager's storage now?\n\nThis needs internet access.")
+    response=$(CONFIRMATION_DIALOG "Quartermaster needs Python 3, Pillow and pyserial.\n\nInstall $PACKAGES to the Pager's storage now?\n\nThis needs internet access.")
     [ "$response" = "$DUCKYSCRIPT_USER_CONFIRMED" ] || return 2
-    SPINNER=$(START_SPINNER "Installing Python 3 and Pillow...")
+    SPINNER=$(START_SPINNER "Installing Python 3, Pillow and pyserial...")
     opkg update >"$LOG_FILE" 2>&1
     opkg -d mmc install $PACKAGES >>"$LOG_FILE" 2>&1
     STOP_SPINNER "$SPINNER"
@@ -80,8 +80,8 @@ if ! ready; then
     install_packages
     case $? in
         0) ;;
-        2) LOG "Quartermaster needs Python 3 and Pillow to run."; exit 0 ;;
-        *) ERROR_DIALOG "Python 3 and Pillow could not be installed. See $LOG_FILE"; exit 1 ;;
+        2) LOG "Quartermaster needs Python 3, Pillow and pyserial to run."; exit 0 ;;
+        *) ERROR_DIALOG "Python 3, Pillow and pyserial could not be installed. See $LOG_FILE"; exit 1 ;;
     esac
 fi
 
