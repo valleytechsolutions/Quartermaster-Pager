@@ -25,6 +25,7 @@ changes the CardputerZero or Raspberry Pi versions, their releases or their stor
 | ![Menu](docs/screens/menu.png) | ![Wardrive](docs/screens/wardrive.png) |
 | ![Alert](docs/screens/alert.png) | ![Hardware](docs/screens/hardware-lora.png) |
 | ![Settings](docs/screens/settings.png) | ![Recon](docs/screens/recon.png) |
+| ![Biscuit pairing](docs/screens/biscuit-search.png) | ![Biscuit node](docs/screens/biscuit-node.png) |
 
 ## License
 

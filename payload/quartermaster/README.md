@@ -23,6 +23,7 @@ and controls made for the D-pad and the two buttons.
 - **Drive Alerts** for Flock cameras, Axon body cameras, Meta glasses and more, with buzzer tones and vibration.
 - **Recon** of nearby Wi-Fi and Bluetooth devices, with the lists from SquachWatch.
 - **Quartermaster Nodes** added by hand under Settings > Nodes.
+- **Biscuit node mode**: pair the Pager with a Biscuit or Biscuit Pro and it scans 6 GHz for the Biscuit.
 
 ## Install
 
@@ -59,16 +60,40 @@ Node firmware does not come with this payload, as payloads hold no binaries. Fla
 https://valleytechsolutions.github.io/Quartermaster/flasher/, then plug it into the Pager and add it under
 **Settings > Nodes**.
 
+## Biscuit node mode
+
+The **Biscuit** tile on the menu makes the Pager a 6 GHz node for a Biscuit or Biscuit Pro. The Biscuit logs
+everything with its own GPS; the Pager adds the 6 GHz band.
+
+1. On the Biscuit, set node mode to **Extended**. Secure node mode does not take Pager nodes, and the Biscuit needs
+   firmware that takes 6 GHz nodes.
+2. On the Pager, open **Biscuit** and press green. Biscuits that answer are listed. Pick yours with the D-pad and
+   press green to pair. The Pager remembers it.
+3. Node mode starts by itself after pairing. Next time, open **Biscuit** and press green to start it.
+4. Start a wardrive on the Biscuit. The Biscuit tile shows **Scanning** and the counters climb.
+5. Press green on the Biscuit screen to stop node mode. Red goes back to the menu and node mode keeps running.
+
+While node mode runs:
+
+- The Pager reports to the Biscuit as a Biscuit Pager node (`Pager:v1.1.0`) and says it is a Pager 6 GHz node.
+- It scans 6 GHz only. It goes back to 2.4 GHz channel 6 for a moment each second to talk to the Biscuit and never
+  reports a network heard there.
+- PineAP stops hopping `wlan1mon`. It gets its channels back when node mode stops or Quartermaster closes.
+- Quartermaster's own wardrive and Recon wait until node mode is stopped.
+
+Hold green on the Biscuit screen to pair with another Biscuit or to forget this one.
+
 ## Files
 
 | Path | What it is |
 | --- | --- |
-| `/root/loot/quartermaster/` | Logs, settings, keys and `errors.log` |
+| `/root/loot/quartermaster/` | Logs, settings, keys, the paired Biscuit and `errors.log` |
 | `/tmp/quartermaster.log` | What the last start printed |
 
 ## Good to know
 
-- Listening only: Quartermaster never transmits on LoRa, never deauthenticates and never joins a network.
+- Quartermaster never transmits on LoRa, never deauthenticates and never joins a network. The only frames it sends
+  are Biscuit node messages on 2.4 GHz channel 6, while Biscuit node mode is on.
 - Respect local laws and privacy. Upload only what you are allowed to collect.
 
 ## Source and credits
@@ -84,4 +109,6 @@ Source, tests and releases: https://github.com/valleytechsolutions/Quartermaster
   NitekryDPaul, DeFlockJoplin and wgreenberg.
 - OUI Spy, Unified Blue and AXEOFF by colonelpanichacks, MIT. [nyanBOX](https://github.com/jbohack/nyanBOX) by
   jbohack, MIT. ESP32 Marauder by justcallmekoko.
+- The Biscuit node protocol, learned from the Biscuit Pager Node by GSHD and CodeHedge. Biscuit is made by
+  [BiscuitShop](https://biscuitshop.us).
 - Meshtastic's device configurations for the CH341 LoRa sticks' pins, and its stream API.

@@ -13,6 +13,28 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[1]
 
 
+class Biscuit:
+    def __init__(self, pairing):
+        self.pairing = pairing
+        self.show("off")
+
+    def show(self, state, found=(), **live):
+        from qmpager import biscuit
+        self.state, self.found, self.live = state, list(found), live
+        self.pairing_mode = state == biscuit.PAIRING
+        self.running = state not in (biscuit.OFF, biscuit.FAILED)
+
+    def status(self):
+        return dict(self.live, state=self.state, error="", pairing=self.pairing_mode, found=self.found,
+                    seconds=self.live.get("seconds", 0))
+
+    def start(self, pair=False):
+        return False
+
+    def stop(self, wait=False):
+        pass
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("checkout")
@@ -25,7 +47,8 @@ def main():
     from quartermaster import wigle
     from quartermaster import lora
     from quartermaster.ui import screens
-    from qmpager import __main__ as pager, listen, usblora, wide
+    from qmpager import __main__ as pager, biscuit, biscuit_screen, listen, usblora, wide
+    biscuit_screen.install()
     wigle.DISPLAY_SIZES["pager"] = "480x222"
     screens.Hardware.lora_card = staticmethod(pager.lora_card)
     listen.present = lambda *a, **k: True
@@ -43,6 +66,7 @@ def main():
         app = qm.build(home, Pager())
         app.square = wide.WideUI()
         app.hw.battery = {"percent": 76, "charging": False}
+        app.biscuit = Biscuit(biscuit.Pairing(str(home / "biscuit.json")))
 
         def shot(name):
             image = qm.steady(app)
@@ -89,6 +113,21 @@ def main():
         qm.press(app)
         shot("recon")
         app.stop_recon()
+        app.open("Biscuit")
+        shot("biscuit-pair")
+        app.biscuit.show(biscuit.PAIRING, found=[
+            {"mac": "24:EC:4A:1C:00:B1", "name": "Biscuit Pro", "secure": False, "ap6": True},
+            {"mac": "24:EC:4A:1C:3F:07", "name": "Biscuit 3F07", "secure": True, "ap6": True}])
+        shot("biscuit-search")
+        app.biscuit.pairing.save("24:EC:4A:1C:00:B1", "Biscuit Pro")
+        app.biscuit.show(biscuit.OFF)
+        shot("biscuit-paired")
+        app.biscuit.show(biscuit.SCANNING, heard=148, sent=141, updates=233, queued=7, channel=37, heard_ago=0.4,
+                         seconds=1520)
+        shot("biscuit-node")
+        app.home()
+        shot("menu-biscuit")
+        app.biscuit.show(biscuit.OFF)
         app.open("About")
         shot("about")
         app.shutdown()
