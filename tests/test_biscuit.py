@@ -102,10 +102,10 @@ class FakeRadio:
         return out
 
 
-def run_node(biscuits, target=None, pair=False, limit=30.0):
+def run_node(biscuits, limit=30.0):
     radio = FakeRadio(biscuits, limit)
     reports = []
-    node = biscuit.Node(radio, reports.append, target=target, pair=pair, clock=radio.clock)
+    node = biscuit.Node(radio, reports.append, clock=radio.clock)
     radio.node = node
     node.run()
     return node, radio, reports
@@ -129,22 +129,56 @@ def test_batches_stay_within_one_frame():
     assert seq == (254 + len(packed)) & 0xFF
 
 
-def test_pairing_lists_biscuits_without_joining():
-    node, radio, reports = run_node([FakeBiscuit(), FakeBiscuit(b"wdbatch=1 encrypt=1", OTHER)], pair=True,
-                                    limit=3)
-    found = {r[1]["mac"]: r[1] for r in reports if r[0] == "found"}
-    assert found["24:EC:4A:00:00:B1"]["ap6"] and not found["24:EC:4A:00:00:B1"]["secure"]
-    assert found["24:EC:4A:00:00:C2"]["secure"]
-    assert node.core is None
+class SilentBiscuit(FakeBiscuit):
+    """A Biscuit whose owner has not searched for nodes in the Biscuit Manager app yet: it answers nobody."""
+
+    def __init__(self, answer_after=None, **kwargs):
+        super().__init__(**kwargs)
+        self.answer_after, self.requests = answer_after, 0
+
+    def heard(self, dst, payload, out):
+        if biscuit.read_message(payload)[0] == biscuit.CORE_REQUEST:
+            self.requests += 1
+            if self.answer_after is None or self.requests < self.answer_after:
+                return
+        super().heard(dst, payload, out)
+
+
+def test_like_codehedges_node_the_pager_asks_until_the_biscuit_adds_it_and_never_pairs_by_itself():
+    nobody = SilentBiscuit()
+    node, radio, _ = run_node([nobody], limit=3)
+    assert node.core is None and node.state == biscuit.SEARCHING
+    requests = [p for dst, p, _ in radio.sent if biscuit.read_message(p)[0] == biscuit.CORE_REQUEST]
+    assert len(requests) >= 5 and all(biscuit.read_message(p)[2] == b"bsc=1" for p in requests)
     assert all(dst == biscuit.BROADCAST for dst, _, _ in radio.sent)
+    later = SilentBiscuit(answer_after=5)
+    node, _, _ = run_node([later], limit=10)
+    assert node.core == BISCUIT and node.state == biscuit.SCANNING
 
 
-def test_node_reports_as_pager_and_scans_only_6ghz():
+def test_the_first_biscuit_that_takes_it_keeps_it():
+    first, second = FakeBiscuit(), FakeBiscuit(mac=OTHER)
+    node, radio, _ = run_node([first, second], limit=6)
+    assert node.core == BISCUIT
+    assert not second.firmware and all(dst != OTHER for dst, _, _ in radio.sent)
+
+
+def test_node_reports_as_pager_and_sends_only_what_codehedges_node_sends():
     fake = FakeBiscuit()
-    node, radio, reports = run_node([fake, FakeBiscuit(mac=OTHER)], target=BISCUIT)
+    node, radio, reports = run_node([fake])
+    kinds = {biscuit.read_message(p)[0] if p[4] != biscuit.WARDRIVE_BATCH else biscuit.WARDRIVE_BATCH
+             for _, p, _ in radio.sent}
+    assert kinds <= {biscuit.CORE_REQUEST, biscuit.FW_VERSION, biscuit.HEARTBEAT, biscuit.ROLE_ACK,
+                     biscuit.WARDRIVE_BATCH, biscuit.CONFIG_ACK, biscuit.STOP_ACK}
+    assert fake.texts == []
+    assert fake.firmware == [b"Pager:v1.1.0"] * 3
+
+
+def test_node_scans_only_6ghz():
+    fake = FakeBiscuit()
+    node, radio, reports = run_node([fake, FakeBiscuit(mac=OTHER)])
     assert node.core == BISCUIT
     assert fake.firmware[0] == b"Pager:v1.1.0"
-    assert fake.texts == [biscuit.LABEL.encode()]
     assert fake.acks[0] == (1, b"TOKN")
     assert node.state == biscuit.SCANNING
     assert all(m == 2437 or 5925 <= m <= 7125 for m in radio.tuned)
@@ -160,13 +194,15 @@ def test_node_reports_as_pager_and_scans_only_6ghz():
 
 
 def test_secure_biscuit_is_not_joined():
-    node, _, _ = run_node([FakeBiscuit(b"wdbatch=1 encrypt=1")], target=BISCUIT, limit=3)
+    node, radio, _ = run_node([FakeBiscuit(b"wdbatch=1 encrypt=1")], limit=3)
     assert node.core is None and node.state == biscuit.SECURE
+    requests = [p for _, p, _ in radio.sent if biscuit.read_message(p)[0] == biscuit.CORE_REQUEST]
+    assert len(requests) >= 5
 
 
 def test_old_biscuit_firmware_gets_no_scan():
     fake = FakeBiscuit(b"wdbatch=1")
-    node, radio, _ = run_node([fake], target=BISCUIT, limit=6)
+    node, radio, _ = run_node([fake], limit=6)
     assert node.state == biscuit.OLD
     assert set(radio.tuned) == {2437}
     assert fake.records == []
@@ -277,47 +313,40 @@ def wait_for(check, seconds=3):
     return False
 
 
-def test_link_holds_and_hands_back_the_radio(tmp_path):
+def test_link_holds_and_hands_back_the_radio():
     events = []
-    pairing = biscuit.Pairing(str(tmp_path / "biscuit.json"))
-    assert pairing.mac is None
-    pairing.save("24:EC:4A:00:00:B1", "Biscuit 00B1")
-    assert biscuit.Pairing(str(tmp_path / "biscuit.json")).name == "Biscuit 00B1"
 
-    def factory(interface, target, pair):
-        events.append(("spawn", target, pair))
+    def factory(interface):
+        events.append(("spawn", interface))
         proc = FakeProcess(events)
         return proc, FakePipe([("status", {"state": biscuit.SCANNING, "heard": 3})], proc)
-    link = biscuit.BiscuitLink(pairing, process=factory, hold=lambda: events.append("hold"),
+    link = biscuit.BiscuitLink(process=factory, hold=lambda: events.append("hold"),
                                release=lambda: events.append("release"), present=lambda: True)
     assert link.start()
     assert wait_for(lambda: link.state == biscuit.SCANNING)
     assert not link.start()
     link.stop(wait=True)
     assert link.state == biscuit.OFF
-    assert events[0] == "hold" and events[1] == ("spawn", "24:EC:4A:00:00:B1", False) and events[-1] == "release"
+    assert events[0] == "hold" and events[1] == ("spawn", "wlan1mon") and events[-1] == "release"
 
 
-def test_link_reports_a_node_that_died(tmp_path):
-    pairing = biscuit.Pairing(str(tmp_path / "biscuit.json"))
+def test_link_starts_with_no_pairing_and_reports_a_node_that_died():
     events = []
 
-    def factory(interface, target, pair):
+    def factory(interface):
         proc = FakeProcess(events)
         proc.alive = False
         return proc, FakePipe([("error", "Cannot use wlan1mon: gone")], proc)
-    link = biscuit.BiscuitLink(pairing, process=factory, hold=lambda: None, release=lambda: events.append("release"),
+    link = biscuit.BiscuitLink(process=factory, hold=lambda: None, release=lambda: events.append("release"),
                                present=lambda: True)
-    assert not link.start()
-    assert link.error == "Pair with a Biscuit first."
-    assert link.start(pair=True)
+    assert link.start()
     assert wait_for(lambda: link.state == biscuit.FAILED)
     assert "gone" in link.error and events[-1] == "release"
 
 
-def test_link_needs_the_monitor_radio(tmp_path):
-    link = biscuit.BiscuitLink(biscuit.Pairing(str(tmp_path / "b.json")), present=lambda: False)
-    assert not link.start(pair=True) and "wlan1mon" in link.error
+def test_link_needs_the_monitor_radio():
+    link = biscuit.BiscuitLink(present=lambda: False)
+    assert not link.start() and "wlan1mon" in link.error
 
 
 def test_hold_and_release_commands(tmp_path):
@@ -338,12 +367,11 @@ def test_hold_and_release_commands(tmp_path):
         [list(c) for c in biscuit.UCI_RELEASE] + [[biscuit.PINEAPD, "restart"]]
 
 
-def test_stop_never_blocks_the_screen_thread(tmp_path):
-    pairing = biscuit.Pairing(str(tmp_path / "biscuit.json"))
+def test_stop_never_blocks_the_screen_thread():
     gate = threading.Event()
-    link = biscuit.BiscuitLink(pairing, process=lambda *a: (_ for _ in ()).throw(AssertionError("spawned")),
+    link = biscuit.BiscuitLink(process=lambda *a: (_ for _ in ()).throw(AssertionError("spawned")),
                                hold=gate.wait, release=lambda: None, present=lambda: True)
-    assert link.start(pair=True)
+    assert link.start()
     started = time.monotonic()
     link.stop()
     assert time.monotonic() - started < 0.5 and link.state == biscuit.STOPPING

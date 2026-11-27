@@ -1,4 +1,8 @@
-"""The Biscuit tile: pair the Pager with a Biscuit or Biscuit Pro and run it as the Biscuit's 6 GHz node."""
+"""The Biscuit tile: run the Pager as the 6 GHz node of a Biscuit or Biscuit Pro.
+
+As with CodeHedge's Biscuit Pager Node payload, there is no pairing here: start node mode, then search for nodes in
+the Biscuit Manager app. The Pager shows up there as a Pager node and the Biscuit adds it.
+"""
 
 from quartermaster.ui import icons, screens
 from quartermaster.ui.gfx import AMBER, GOLD, GREEN, MUTED, RED
@@ -8,8 +12,8 @@ from . import biscuit
 TILE = ("B", "Biscuit", "biscuit")
 WORDS = {
     biscuit.STARTING: ("Starting", "Taking the Pager radio from PineAP.", GOLD),
-    biscuit.PAIRING: ("Pairing", "Looking for Biscuits on channel 6.", GOLD),
-    biscuit.SEARCHING: ("Searching", "Looking for your Biscuit on channel 6.", AMBER),
+    biscuit.SEARCHING: ("Waiting", "Search for nodes in the Biscuit Manager app. This Pager shows up as a Pager "
+                                   "node: add it there.", AMBER),
     biscuit.JOINED: ("Joined", "Joined. Start a wardrive on the Biscuit and this Pager scans 6 GHz for it.", GOLD),
     biscuit.SCANNING: ("Scanning", "Scanning 6 GHz for the Biscuit.", GREEN),
     biscuit.SECURE: ("Secure mode", "The Biscuit is in Secure node mode. Set it to Extended node mode.", RED),
@@ -19,8 +23,8 @@ WORDS = {
     biscuit.OFF: ("Off", "", MUTED),
 }
 BUSY = "Stop the wardrive and Recon first: node mode scans 6 GHz and nothing else."
-HELP = ("Set your Biscuit or Biscuit Pro to Extended node mode, then press green. The Pager reports to it as a "
-        "Pager 6 GHz node and scans 6 GHz only.")
+HELP = ("Set your Biscuit or Biscuit Pro to Extended node mode and press green. Then search for nodes in the Biscuit "
+        "Manager app: this Pager shows up as a Pager node and the Biscuit adds it. It scans 6 GHz only.")
 
 
 def cookie(d, s):
@@ -33,22 +37,8 @@ class BiscuitScreen(screens.Screen):
     title = "Biscuit node"
     refresh = 0.5
 
-    def __init__(self):
-        self.index = 0
-        self.start_after = False
-
-    def link(self, app):
-        return app.biscuit
-
     def hints(self, app):
-        link = app.biscuit
-        if link.running and link.pairing_mode:
-            return [("OK", "Pair")]
-        if link.running:
-            return [("OK", "Stop node")]
-        if not link.pairing.mac:
-            return [("OK", "Search")]
-        return [("OK", "Start node"), ("P", "Pair again"), ("F", "Forget Biscuit")]
+        return [("OK", "Stop node")] if app.biscuit.running else [("OK", "Start node")]
 
     def busy(self, app):
         if app.wardriving or app.recon_running:
@@ -56,65 +46,19 @@ class BiscuitScreen(screens.Screen):
             return True
         return False
 
-    def pair(self, app):
-        if not self.busy(app):
-            self.index = 0
-            app.biscuit.start(pair=True)
-
     def tick(self, app):
-        link = app.biscuit
-        if self.start_after and link.state in (biscuit.OFF, biscuit.FAILED):
-            self.start_after = False
-            if not self.busy(app):
-                link.start()
-
-    def pick(self, app):
-        found = app.biscuit.status()["found"]
-        if not found:
-            return
-        chosen = found[min(self.index, len(found) - 1)]
-        if chosen["secure"]:
-            app.toast("That Biscuit is in Secure node mode. Set it to Extended node mode first.", AMBER, 5)
-            return
-        app.biscuit.pairing.save(chosen["mac"], chosen["name"])
-        app.biscuit.stop()
-        self.start_after = True
-        app.toast("Paired with %s." % chosen["name"], GREEN)
-
-    def forget(self, app):
-        def done():
-            app.biscuit.pairing.forget()
-        app.confirm("Forget %s?" % app.biscuit.pairing.name, "Pair again to feed a Biscuit from this Pager.",
-                    "Forget", done, danger=True)
+        pass
 
     def handle(self, key, app):
         link = app.biscuit
         name = key.name
-        if name in ("UP", "DOWN") and link.running and link.pairing_mode:
-            count = len(link.found)
-            if count:
-                self.index = (self.index + (1 if name == "DOWN" else -1)) % count
-            return True
         if name == "ENTER" and not key.repeat:
-            if link.running and link.pairing_mode:
-                self.pick(app)
-            elif link.running:
+            if link.running:
                 link.stop()
-            elif not link.pairing.mac:
-                self.pair(app)
             elif not self.busy(app):
                 link.start()
             return True
-        if name == "P" and not link.running:
-            self.pair(app)
-            return True
-        if name == "F" and not link.running and link.pairing.mac:
-            self.forget(app)
-            return True
         if name in ("ESC", "BACKSPACE"):
-            if link.running and link.pairing_mode:
-                link.stop()
-                return True
             app.pop()
             return True
         return False
@@ -130,7 +74,7 @@ def subtitle(app):
         return word, color
     if link.state == biscuit.FAILED:
         return "Stopped", AMBER
-    return ("Paired", MUTED) if link.pairing.mac else ("Not paired", MUTED)
+    return "Off", MUTED
 
 
 def install():

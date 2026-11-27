@@ -177,7 +177,7 @@ def main(argv=None):
                   hw=HardwareWatch(gps_ports=gps_ports), cap=cap,
                   updates=updates.check_pager)
         app.square = wide.WideUI()
-        app.biscuit = biscuit.BiscuitLink(biscuit.Pairing(str(DEFAULT_ROOT / "biscuit.json")))
+        app.biscuit = biscuit.BiscuitLink()
         cleanup.callback(app.biscuit.stop, True)
         if isinstance(app.player, BuzzerPlayer):
             app.player.vibrate = lambda: app.cfg.get("drive_alert_tones", True)

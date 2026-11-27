@@ -14,21 +14,18 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class Biscuit:
-    def __init__(self, pairing):
-        self.pairing = pairing
+    def __init__(self):
         self.show("off")
 
-    def show(self, state, found=(), **live):
+    def show(self, state, **live):
         from qmpager import biscuit
-        self.state, self.found, self.live = state, list(found), live
-        self.pairing_mode = state == biscuit.PAIRING
+        self.state, self.live = state, live
         self.running = state not in (biscuit.OFF, biscuit.FAILED)
 
     def status(self):
-        return dict(self.live, state=self.state, error="", pairing=self.pairing_mode, found=self.found,
-                    seconds=self.live.get("seconds", 0))
+        return dict(self.live, state=self.state, error="", seconds=self.live.get("seconds", 0))
 
-    def start(self, pair=False):
+    def start(self):
         return False
 
     def stop(self, wait=False):
@@ -66,7 +63,7 @@ def main():
         app = qm.build(home, Pager())
         app.square = wide.WideUI()
         app.hw.battery = {"percent": 76, "charging": False}
-        app.biscuit = Biscuit(biscuit.Pairing(str(home / "biscuit.json")))
+        app.biscuit = Biscuit()
 
         def shot(name):
             image = qm.steady(app)
@@ -114,16 +111,11 @@ def main():
         shot("recon")
         app.stop_recon()
         app.open("Biscuit")
-        shot("biscuit-pair")
-        app.biscuit.show(biscuit.PAIRING, found=[
-            {"mac": "24:EC:4A:1C:00:B1", "name": "Biscuit Pro", "secure": False, "ap6": True},
-            {"mac": "24:EC:4A:1C:3F:07", "name": "Biscuit 3F07", "secure": True, "ap6": True}])
-        shot("biscuit-search")
-        app.biscuit.pairing.save("24:EC:4A:1C:00:B1", "Biscuit Pro")
-        app.biscuit.show(biscuit.OFF)
-        shot("biscuit-paired")
-        app.biscuit.show(biscuit.SCANNING, heard=148, sent=141, updates=233, queued=7, channel=37, heard_ago=0.4,
-                         seconds=1520)
+        shot("biscuit-start")
+        app.biscuit.show(biscuit.SEARCHING, seconds=12)
+        shot("biscuit-waiting")
+        app.biscuit.show(biscuit.SCANNING, biscuit="24:EC:4A:1C:00:B1", heard=148, sent=141, updates=233, queued=7,
+                         channel=37, heard_ago=0.4, seconds=1520)
         shot("biscuit-node")
         app.home()
         shot("menu-biscuit")

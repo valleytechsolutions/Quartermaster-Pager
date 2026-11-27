@@ -383,35 +383,14 @@ class WideUI(SquareUI):
         screen.tick(app)
         link = app.biscuit
         s = link.status()
-        paired = link.pairing
-        if link.running and link.pairing_mode:
-            found = s["found"]
-            y = self.paragraph(c, "Looking for Biscuits on channel 6…", TOP + 4, GOLD, face=self.small)
-            if not found:
-                self.paragraph(c, "Set the Biscuit or Biscuit Pro to Extended node mode. It shows up here when it "
-                               "answers.", y + 6, MUTED)
-                return "Red cancel"
-            screen.index = min(screen.index, len(found) - 1)
-            values = ["Secure mode" if b["secure"] else "6 GHz ready" if b["ap6"] else "Old firmware" for b in found]
-            self.rows(c, ["%s  %s" % (b["name"], b["mac"][-8:]) for b in found], screen.index, start=y + 2,
-                      values=values)
-            return "Up / Down choose · Green pair · Red cancel"
         if not link.running:
             y = TOP + 8
-            if paired.mac:
-                c.text((10, y), paired.name, font("display", 26), GOLD, width=WIDTH - 20)
-                y = self.paragraph(c, "Paired · " + paired.mac, y + 36, MUTED, face=self.small, x0=10)
-                if s["error"] and link.state == biscuit.FAILED:
-                    y = self.paragraph(c, s["error"], y + 6, RED, face=self.small, x0=10)
-                self.paragraph(c, "Green starts node mode. The Pager radio leaves PineAP, reports to the Biscuit as "
-                               "a Pager 6 GHz node and scans 6 GHz only until you stop it.", y + 6, TEXT, x0=10)
-                return "Green start · Hold green pair again or forget · Red back"
-            c.text((10, y), "Pair with a Biscuit", font("display", 26), GOLD, width=WIDTH - 20)
+            c.text((10, y), "Biscuit 6 GHz node", font("display", 26), GOLD, width=WIDTH - 20)
             y = y + 38
             if s["error"] and link.state == biscuit.FAILED:
                 y = self.paragraph(c, s["error"], y, RED, face=self.small, x0=10) + 4
             self.paragraph(c, biscuit_screen.HELP, y, TEXT, x0=10)
-            return "Green search · Red back"
+            return "Green start node · Red back"
         word, detail, color = biscuit_screen.WORDS.get(s["state"], biscuit_screen.WORDS[biscuit.FAILED])
         half = 252
         tw, th = (half - 14) // 2, (BOTTOM - TOP - 12) // 2
@@ -424,7 +403,7 @@ class WideUI(SquareUI):
         y = TOP + 4
         c.text((x0, y), word, font("display", 24), color, width=WIDTH - x0 - 8)
         y = self.paragraph(c, detail, y + 32, TEXT, face=self.small, x0=x0)
-        lines = [paired.name or "Biscuit"]
+        lines = ["Biscuit " + s["biscuit"] if s.get("biscuit") else "No Biscuit yet"]
         if s.get("channel"):
             lines.append("6 GHz channel %d" % s["channel"])
         if s.get("heard_ago") is not None:
