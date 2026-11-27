@@ -51,11 +51,11 @@ class PagerDisplay(FramebufferDisplay):
             view = view[os.write(self.fd, view):]
 
     def show(self, img):
-        data = self.frame(img)
-        if data == self._last:
+        raw = img.tobytes()
+        if raw == self._last:
             return
-        self._last = data
-        self.write(data)
+        self._last = raw
+        self.write(self.frame(img))
 
     def close(self):
         try:

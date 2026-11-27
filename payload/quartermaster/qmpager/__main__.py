@@ -80,6 +80,7 @@ def install():
         return profiles
     engine.Wardrive._lora_plan = lora_plan
     screens.Hardware.lora_card = staticmethod(lora_card)
+    screens.Splash.refresh = 0.1
     return phys
 
 

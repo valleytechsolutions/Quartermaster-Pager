@@ -246,7 +246,7 @@ class WideUI(SquareUI):
         screen.render(source, app)
         body = source.image.crop((0, STATUS_H + 1, W, H - FOOTER_H))
         zoom = min((WIDTH - 8) / body.width, (BOTTOM - TOP - 2) / body.height)
-        body = body.resize((int(body.width * zoom), int(body.height * zoom)), Image.Resampling.LANCZOS)
+        body = body.resize((int(body.width * zoom), int(body.height * zoom)), Image.Resampling.BILINEAR)
         x = (WIDTH - body.width) // 2
         y = TOP + (BOTTOM - TOP - body.height) // 2
         c.paste(body, (x, y))
@@ -374,7 +374,7 @@ class WideUI(SquareUI):
         if isinstance(screen, screens.Splash):
             source = Canvas()
             screen.render(source, app)
-            scaled = source.image.resize((int(W * (HEIGHT / H)), HEIGHT), Image.Resampling.LANCZOS)
+            scaled = source.image.resize((int(W * (HEIGHT / H)), HEIGHT), Image.Resampling.BILINEAR)
             c.rect((0, 0, WIDTH - 1, HEIGHT - 1), fill=BG)
             c.paste(scaled, ((WIDTH - scaled.width) // 2, 0))
             return c.image

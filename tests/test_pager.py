@@ -215,3 +215,19 @@ def test_screen_bytes_are_little_endian_rgb565_without_numpy():
     data = screen.to_rgb565(img)
     expected = [0xF800, (0x12 >> 3) << 11 | (0x34 >> 2) << 5 | 0x56 >> 3]
     assert data == struct.pack("<2H", *expected)
+
+
+def test_kernel_filter_keeps_management_and_flock_data_frames_only():
+    from qmpager import listen
+    code = listen.program()
+    radiotap = bytes((0, 0, 8, 0, 0, 0, 0, 0))
+
+    def frame(fc, addr1, addr2):
+        return radiotap + bytes((fc, 0, 0, 0)) + bytes.fromhex(addr1) + bytes.fromhex(addr2) + bytes(8)
+    assert listen.run(code, frame(0x80, "ffffffffffff", "112233445566"))
+    assert listen.run(code, frame(0x40, "ffffffffffff", "112233445566"))
+    assert not listen.run(code, frame(0x08, "112233445566", "aabbccddeeff"))
+    assert listen.run(code, frame(0x08, "112233445566", "70c94e000001"))
+    assert listen.run(code, frame(0x88, "b83532000001", "aabbccddeeff"))
+    assert not listen.run(code, frame(0xD4, "112233445566", "70c94e000001"))
+    assert listen.run(code, bytes((0, 0, 0, 1)) + bytes(300))

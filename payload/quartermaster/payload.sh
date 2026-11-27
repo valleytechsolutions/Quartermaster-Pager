@@ -15,6 +15,7 @@ LAUNCH_DIR="$(cd "$(dirname "$0")" && pwd)"
 export PATH="/mmc/usr/bin:/mmc/usr/sbin:/mmc/bin:/mmc/sbin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 export LD_LIBRARY_PATH="/mmc/usr/lib:/mmc/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export QUARTERMASTER_HOME="/root/loot/quartermaster"
+export PYTHONPYCACHEPREFIX="$QUARTERMASTER_HOME/.python-cache"
 LOG_FILE="/tmp/quartermaster.log"
 LOCK="/tmp/quartermaster.lock"
 DISPLAY_SET=0
@@ -88,7 +89,7 @@ fi
 mkdir -p "$QUARTERMASTER_HOME"
 UI_TAKEOVER >/dev/null 2>&1 || { ERROR_DIALOG "Could not take over the Pager screen."; exit 1; }
 DISPLAY_SET=1
-"$PYTHON_BIN" -B -m qmpager >"$LOG_FILE" 2>&1 &
+"$PYTHON_BIN" -m qmpager >"$LOG_FILE" 2>&1 &
 QM_PID=$!
 wait "$QM_PID"
 STATUS=$?

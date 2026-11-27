@@ -6,9 +6,11 @@ and probe responses become the same network records an `iw` scan gives; probe re
 floods and evil twin clashes go to Drive Alerts and Recon, as Deep scan does on the CardputerZero.
 """
 
+import ctypes
 import multiprocessing
 import os
 import socket
+import struct
 import threading
 import time
 
@@ -17,6 +19,80 @@ from quartermaster import faults, monitor
 INTERFACE = "wlan1mon"
 ETH_P_ALL = 0x0003
 LABEL = "Pager radio (PineAP monitor)"
+
+
+SO_ATTACH_FILTER = 26
+KEEP_BYTES = 4096
+LD_B_ABS, LD_B_IND, LD_W_IND, LDX_B_ABS = 0x30, 0x50, 0x40, 0xB1
+AND_K, JEQ_K, RET_K = 0x54, 0x15, 0x06
+OUIS = sorted(monitor.FLOCK_OUIS)
+
+
+def program(ouis=OUIS):
+    """Kernel filter: every management frame, and data frames only when an address is one of the Flock prefixes.
+
+    Data frames are most of what a busy monitor radio hears and the frame reader only looks at them for those
+    prefixes, so the rest are dropped before they reach Python. A radiotap header of 256 bytes or more is passed on
+    for the reader to judge."""
+    head = [(LD_B_ABS, 3), (JEQ_K, 0, "go", "keep"), ("go",), (LDX_B_ABS, 2), (LD_B_IND, 0), (AND_K, 0x0C),
+            (JEQ_K, 0x00, "keep", "data?"), ("data?",), (JEQ_K, 0x08, "addr2", "drop"), ("addr2",)]
+    for at in (10, 4):
+        head.append((LD_W_IND, at))
+        head.append((AND_K, 0xFFFFFF00))
+        for oui in ouis:
+            head.append((JEQ_K, oui << 8, "keep", None))
+    head += [("drop",), (RET_K, 0), ("keep",), (RET_K, KEEP_BYTES)]
+    labels, code = {}, []
+    for item in head:
+        if len(item) == 1:
+            labels[item[0]] = len(code)
+        else:
+            code.append(item)
+    out = []
+    for i, item in enumerate(code):
+        op, k = item[0], item[1]
+        jt = jf = 0
+        if op == JEQ_K:
+            jt = labels[item[2]] - i - 1 if item[2] else 0
+            jf = labels[item[3]] - i - 1 if item[3] else 0
+            if not 0 <= jt <= 255 or not 0 <= jf <= 255:
+                raise ValueError("filter jump too far")
+        out.append((op, jt, jf, k & 0xFFFFFFFF))
+    return out
+
+
+def attach(sock, code=None):
+    code = code or program()
+    raw = b"".join(struct.pack("HBBI", *ins) for ins in code)
+    buffer = ctypes.create_string_buffer(raw, len(raw))
+    fprog = struct.pack("HL", len(code), ctypes.addressof(buffer))
+    sock.setsockopt(socket.SOL_SOCKET, SO_ATTACH_FILTER, fprog)
+    return buffer
+
+
+def run(code, packet):
+    a = x = 0
+    pc = 0
+    while True:
+        op, jt, jf, k = code[pc]
+        pc += 1
+        try:
+            if op == LD_B_ABS:
+                a = packet[k]
+            elif op == LDX_B_ABS:
+                x = packet[k]
+            elif op == LD_B_IND:
+                a = packet[x + k]
+            elif op == LD_W_IND:
+                a = struct.unpack(">I", packet[x + k:x + k + 4])[0]
+            elif op == AND_K:
+                a &= k
+            elif op == JEQ_K:
+                pc += jt if a == k else jf
+            elif op == RET_K:
+                return k
+        except (IndexError, struct.error):
+            return 0
 
 
 def present(interface=INTERFACE, net="/sys/class/net"):
@@ -37,6 +113,10 @@ def capture(outbox, interface, rssi_step, opener=None):
         sock = opener() if opener else socket.socket(socket.AF_PACKET, socket.SOCK_RAW, socket.htons(ETH_P_ALL))
         if not opener:
             sock.bind((interface, 0))
+            try:
+                attach(sock)
+            except (OSError, ValueError):
+                pass
         sock.settimeout(0.2)
     except OSError as exc:
         outbox.send(("error", "Cannot read %s: %s" % (interface, exc)))
