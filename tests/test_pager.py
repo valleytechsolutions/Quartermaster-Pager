@@ -231,3 +231,72 @@ def test_kernel_filter_keeps_management_and_flock_data_frames_only():
     assert listen.run(code, frame(0x88, "b83532000001", "aabbccddeeff"))
     assert not listen.run(code, frame(0xD4, "112233445566", "70c94e000001"))
     assert listen.run(code, bytes((0, 0, 0, 1)) + bytes(300))
+
+
+class FakeBacklight:
+    top = 255
+
+    def __init__(self, level):
+        self.value = level
+
+    def present(self):
+        return True
+
+    def level(self):
+        return self.value
+
+    def set(self, value):
+        self.value = value
+
+
+def test_screen_stays_lit_and_times_out_only_when_asked():
+    from qmpager.awake import ScreenKeeper
+    now = [0.0]
+    light = FakeBacklight(200)
+    timeout = [0]
+    keeper = ScreenKeeper(light, lambda: timeout[0], clock=lambda: now[0])
+    light.value = 40
+    keeper.tick()
+    assert light.value == 200
+    now[0] = 1000
+    keeper.tick()
+    assert light.value == 200
+    timeout[0] = 30
+    keeper.tick()
+    assert light.value == 0 and keeper.asleep
+    assert keeper.touch() is True and light.value == 200
+    assert keeper.touch() is False
+    keeper.restore()
+    assert light.value == 200
+
+
+def test_the_press_that_wakes_the_screen_does_nothing_else():
+    pad = buttons.PagerInput.__new__(buttons.PagerInput)
+    pad.down, pad.fired, pad.quit, pad.on_quit = {}, set(), False, None
+    pad.clock = lambda: 0.0
+    pad.read_events = lambda: [("A", 1)]
+    pad.fd = None
+    import select as sel
+    original = sel.select
+    sel.select = lambda r, w, x, t: (r, [], [])
+    try:
+        pad.on_input = lambda: True
+        assert pad.poll(0) == []
+        pad.read_events = lambda: [("A", 0)]
+        pad.on_input = lambda: False
+        assert pad.poll(0) == []
+    finally:
+        sel.select = original
+
+
+def test_screen_timeout_is_in_settings_and_defaults_to_never():
+    import subprocess
+    code = "\n".join([
+        "import qmpager.__main__ as m", "m.install()", "from quartermaster import config",
+        "assert config.DEFAULTS['screen_timeout'] == 0",
+        "assert any(k == 'screen_timeout' for k, *_ in dict(config.SECTIONS)['SCREEN'])",
+        "assert config.load('/nonexistent')['screen_timeout'] == 0", "print('ok')"])
+    result = subprocess.run([sys.executable, "-c", code], cwd=str(ROOT / "payload" / "quartermaster"),
+                            capture_output=True, text=True,
+                            env={"QUARTERMASTER_HOME": "/tmp/qm-test", "PATH": "/usr/bin:/bin"})
+    assert result.stdout.strip() == "ok", result.stderr
