@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Version tag, like v1.1.2
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Check the version
+        run: |
+          version="${{ inputs.tag }}"
+          version="${version#v}"
+          grep -q "^# Version: $version$" payload/quartermaster/payload.sh
+          grep -q "PAGER_VERSION = \"$version\"" payload/quartermaster/qmpager/__init__.py
+      - name: Test
+        run: |
+          pip install pytest pillow==10.2.0 pyserial
+          python -m pytest -q tests
+      - name: Package
+        run: |
+          find payload -name __pycache__ -prune -exec rm -rf {} +
+          tar -czf quartermaster-pager.tar.gz -C payload quartermaster
+          (cd payload && zip -qr ../quartermaster-pager.zip quartermaster)
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ inputs.tag }}" quartermaster-pager.tar.gz quartermaster-pager.zip \
+            --target "$GITHUB_SHA" --title "Quartermaster for the Pager ${{ inputs.tag }}" \
+            --notes-file - <<'NOTES'
+          Quartermaster as a Hak5 WiFi Pineapple Pager payload.
+
+          Copy the `quartermaster` folder from either archive to `/root/payloads/user/reconnaissance/` on the Pager,
+          then open Payloads > Reconnaissance > Quartermaster. See the payload's README for everything it does.
+          NOTES
