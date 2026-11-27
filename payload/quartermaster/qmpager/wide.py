@@ -24,6 +24,16 @@ ROW = 22
 HOME_COLUMNS = 4
 
 
+def pager_cards(cards):
+    from . import listen
+    here = listen.present()
+    radio = {"tag": "WIFI", "color": GREEN if here else AMBER, "title": listen.LABEL, "bands": ["2.4", "5", "6"],
+             "detail": "Wardrives read every frame it hears. PineAP keeps its channels." if here else
+             "wlan1mon is not up. Turn on PineAP or Recon, then open Quartermaster again."}
+    kept = [card for card in cards if card.get("title") != "No Wi-Fi adapter found"]
+    return [radio] + kept
+
+
 class WideUI(SquareUI):
     def __init__(self):
         super().__init__(240)
@@ -302,7 +312,7 @@ class WideUI(SquareUI):
         self.rows(c, labels, screen.index, values=values)
 
     def hardware(self, c, app, screen):
-        cards = screen.cards(app)
+        cards = pager_cards(screen.cards(app))
         if not cards:
             return
         screen.top = min(screen.top, len(cards) - 1)

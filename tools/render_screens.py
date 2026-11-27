@@ -23,8 +23,12 @@ def main():
     sys.path[:0] = [str(ROOT / "payload" / "quartermaster"), str(checkout), str(checkout / "tools")]
     import render_screens as qm
     from quartermaster import wigle
-    from qmpager import wide
+    from quartermaster import lora
+    from quartermaster.ui import screens
+    from qmpager import __main__ as pager, listen, usblora, wide
     wigle.DISPLAY_SIZES["pager"] = "480x222"
+    screens.Hardware.lora_card = staticmethod(pager.lora_card)
+    listen.present = lambda *a, **k: True
 
     class Pager(qm.Hat):
         def __init__(self):
@@ -60,6 +64,13 @@ def main():
         app.stop_wardrive()
         app.open("Hardware")
         shot("hardware")
+        stick = usblora.UsbLora(sticks=lambda: [], service=lambda: False, ports=lambda: [])
+        stick.state, stick.kind, stick.label = lora.FOUND, usblora.DIRECT, "MeshToad"
+        app.cap = stick
+        app.open("Hardware")
+        cards = wide.pager_cards(app.screen.cards(app))
+        app.screen.top = next(i for i, card in enumerate(cards) if card["tag"] == "LORA")
+        shot("hardware-lora")
         app.open("Settings")
         shot("settings")
         app.open("Logs")

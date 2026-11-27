@@ -35,8 +35,8 @@ def built_in_phys(sys_net="/sys/class/net"):
 def install():
     """Put the Pager's parts in place. Must run before any other part of Quartermaster is imported."""
     os.environ.setdefault("QUARTERMASTER_HOME", str(LOOT))
-    from quartermaster import ble, deepscan, hardware, tones, wigle
-    from . import hci, listen, sound
+    from quartermaster import ble, deepscan, hardware, meshpackets, tones, wigle
+    from . import aes, ed25519, hci, listen, sound
     wigle.DISPLAY_SIZES["pager"] = "480x222"
     ble.BleScanner = hci.HciBleScanner
     deepscan.DeepScan = listen.PagerListen
@@ -48,7 +48,64 @@ def install():
     def usb_adapters(*args, **kwargs):
         return [a for a in every(*args, **kwargs) if a.get("phy") not in phys and a.get("type") != "803"]
     hardware.wifi_adapters = usb_adapters
+
+    found_ports = hardware.gps_candidates
+
+    def gps_ports(*args, **kwargs):
+        return [p for p in found_ports(*args, **kwargs) if hardware.port_mark(p["path"]) != "meshtastic"]
+    hardware.gps_candidates = gps_ports
+    hardware.all_serial_ports = found_ports
+
+    library_ctr, library_verify = meshpackets._aes_ctr, meshpackets._verify
+
+    def aes_ctr(key, nonce, data):
+        plain = library_ctr(key, nonce, data)
+        return plain if plain is not None else aes.ctr(key, nonce, data)
+
+    def verify(key, message, signature):
+        result = library_verify(key, message, signature)
+        return result if result is not None else ed25519.verify(key, message, signature)
+    meshpackets._aes_ctr, meshpackets._verify = aes_ctr, verify
+
+    from quartermaster import engine
+    from quartermaster.ui import screens
+    plan = engine.Wardrive._lora_plan
+
+    def lora_plan(self):
+        profiles = plan(self)
+        if getattr(self.cap, "meshtastic_only", False):
+            return [p for p in profiles if p.protocol == "meshtastic"][:1]
+        return profiles
+    engine.Wardrive._lora_plan = lora_plan
+    screens.Hardware.lora_card = staticmethod(lora_card)
     return phys
+
+
+def lora_card(app, status):
+    from quartermaster import lora, mesh
+    from quartermaster.ui.screens import AMBER, FAINT, GOLD, GREEN, plural
+    cap, on = app.cap, app.cfg.get("lora", "auto")
+    live = status.get("lora") if status is not None else None
+    title = cap.title() if hasattr(cap, "title") else "USB LoRa radio for mesh nodes"
+    card = {"tag": "LORA", "color": GOLD, "title": title, "right": lora.region_name(app.cfg.get("country", "US"))}
+    if on is False:
+        return dict(card, color=FAINT, detail=mesh.WORDS[lora.OFF], detail_color=FAINT, right="")
+    if live is not None and live["state"] == mesh.LISTENING:
+        return dict(card, detail=live["detail"], detail_color=GREEN, right=plural(live["packets"], "packet"))
+    if live is not None:
+        state = live["reason"] or live["state"]
+    elif cap.found:
+        return dict(card, detail="Ready. It listens in the next wardrive.")
+    elif cap.state == lora.ABSENT:
+        return dict(card, title="USB LoRa radio", right="", color=FAINT,
+                    detail="None plugged in. MeshToad, MeshStick, Glytch Mesh Mod or a Meshtastic board is found "
+                           "by itself.", detail_color=FAINT)
+    else:
+        state = cap.state
+    card.update(detail=mesh.WORDS.get(state, mesh.WORDS[mesh.FAILED]), right="")
+    if state != lora.CHECKING:
+        card.update(color=AMBER, edge=AMBER, detail_color=AMBER)
+    return card
 
 
 def main(argv=None):
@@ -63,7 +120,7 @@ def main(argv=None):
     from quartermaster.gnss import GPS
     from quartermaster.power import Rails
     from quartermaster.ui.app import App, HardwareWatch
-    from . import listen, wide
+    from . import listen, usblora, wide
     from .buttons import PagerInput
     from .device import Lights
     from .screen import PagerDisplay
@@ -76,6 +133,9 @@ def main(argv=None):
             print("wifi  %(interface)s  %(label)s  bands=%(bands)s  usb=%(usb_id)s" % adapter)
         for port in gps_ports():
             print("gps   %(path)s  %(label)s" % port)
+        radio = usblora.UsbLora(ports=lambda: hardware.all_serial_ports(cardputer=False))
+        radio.look()
+        print("lora  %s" % (radio.title() if radio.found else lora.WORDS.get(radio.state, radio.state)))
         return 0
 
     DEFAULT_ROOT.mkdir(parents=True, exist_ok=True)
@@ -100,8 +160,10 @@ def main(argv=None):
         worker.start()
         cleanup.callback(worker.join, 3)
         cleanup.callback(stopped.set)
+        cap = usblora.UsbLora(ports=lambda: hardware.all_serial_ports(cardputer=False))
+        cleanup.callback(cap.stop)
         app = App(display, keyboard, gps, cfg, root=DEFAULT_ROOT, splash=not args.no_splash,
-                  hw=HardwareWatch(gps_ports=gps_ports), cap=lora.Cap(rails, cardputer=False),
+                  hw=HardwareWatch(gps_ports=gps_ports), cap=cap,
                   updates=updates_check.check_pi)
         app.square = wide.WideUI()
         if isinstance(app.player, BuzzerPlayer):
