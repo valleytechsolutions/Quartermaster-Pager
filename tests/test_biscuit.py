@@ -152,7 +152,7 @@ def test_node_reports_as_pager_and_scans_only_6ghz():
     assert NET6 in sent and NET24 not in sent
     first = next(r for r in fake.records if r[1:7] == NET6)
     assert first[0] == biscuit.AP6_RECORD and first[7] == 5 and first[9] == 4 and first[11:] == b"six-gig"
-    assert sent.count(NET6) == 1
+    assert 1 < sent.count(NET6) <= 30 / biscuit.RESEND_SECONDS + 1
     status = [r[1] for r in reports if r[0] == "status"][-1]
     assert status["final"] and status["sent"] == 1 and status["heard"] == 1
     assert all(dst in (BISCUIT, biscuit.BROADCAST) for dst, _, _ in radio.sent)
@@ -349,3 +349,18 @@ def test_stop_never_blocks_the_screen_thread(tmp_path):
     assert time.monotonic() - started < 0.5 and link.state == biscuit.STOPPING
     gate.set()
     assert wait_for(lambda: link.state == biscuit.OFF)
+
+
+def test_a_network_is_sent_again_no_sooner_than_5_seconds():
+    now = [0.0]
+    seen = biscuit.Sightings(clock=lambda: now[0])
+    seen.add(NET6, 37, -70, 4, b"a")
+    assert len(seen.take()) == 1
+    now[0] = 4.9
+    seen.add(NET6, 37, -40, 4, b"a")
+    assert seen.take() == []
+    now[0] = 5.1
+    seen.add(NET6, 37, -60, 4, b"a")
+    seen.add(NET6, 37, -55, 4, b"a")
+    taken = seen.take()
+    assert len(taken) == 1 and taken[0][1][8] == (-55) & 0xff

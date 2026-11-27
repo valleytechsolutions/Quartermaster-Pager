@@ -39,7 +39,7 @@ PSC = tuple(range(5, 230, 16))
 EVERY = tuple(range(1, 234, 4))
 DWELL, SCAN_SLOT, HOME_SLOT = 0.11, 0.9, 0.15
 REQUEST_GAP, HEARTBEAT_GAP, CONFIG_GAP, FIRMWARE_GAP = 0.3, 3.0, 30.0, 2.0
-RESEND_SECONDS, RESEND_GAIN = 30.0, 6
+RESEND_SECONDS = 5.0
 LOST_SECONDS = 20.0
 ACK_WINDOW = 0.05
 STATUS_GAP = 1.0
@@ -177,8 +177,8 @@ def raw_ssid(frame):
 
 
 class Sightings:
-    """6 GHz networks waiting to go to the Biscuit: each once, then again when it is heard much closer or after a
-    while, so the Biscuit's log follows the drive."""
+    """6 GHz networks waiting to go to the Biscuit: the strongest sighting of each, sent again no sooner than 5 s
+    after the last send, as CodeHedge's node does."""
 
     def __init__(self, clock=time.monotonic):
         self.clock = clock
@@ -190,7 +190,7 @@ class Sightings:
         self.heard.add(bssid)
         now = self.clock()
         last = self.sent.get(bssid)
-        if last is not None and now - last[0] < RESEND_SECONDS and rssi < last[1] + RESEND_GAIN:
+        if last is not None and now - last[0] < RESEND_SECONDS:
             return
         held = self.pending.get(bssid)
         if held is None or rssi > held[1]:
