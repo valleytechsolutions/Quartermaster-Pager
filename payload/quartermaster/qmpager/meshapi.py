@@ -15,6 +15,8 @@ import time
 
 from quartermaster import lora, meshpackets
 
+from . import aes
+
 START1, START2 = 0x94, 0xC3
 TCP_PORT = 4403
 MAX = 512
@@ -117,9 +119,9 @@ def heard(message, me=None):
             if port is None:
                 return None
             plain = _key(1, 0) + _varint(port) + _key(2, 2) + _varint(len(body)) + body
-            body = meshpackets._aes_ctr(meshpackets.DEFAULT_KEY, struct.pack("<QII", packet_id, source, 0), plain)
-            if body is None:
-                return None
+            nonce = struct.pack("<QII", packet_id, source, 0)
+            body = meshpackets._aes_ctr(meshpackets.DEFAULT_KEY, nonce, plain) or \
+                aes.ctr(meshpackets.DEFAULT_KEY, nonce, plain)
             channel = LONG_FAST
         elif encrypted is not None:
             body = encrypted

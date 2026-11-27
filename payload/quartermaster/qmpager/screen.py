@@ -2,11 +2,23 @@
 
 import os
 
-from PIL import Image
+from PIL import Image, ImageChops
 
-from quartermaster.ui.display import FramebufferDisplay, to_rgb565
+from quartermaster.ui.display import FramebufferDisplay
 
 WIDTH, HEIGHT = 480, 222
+LOW_G = [((v >> 2) & 7) << 5 for v in range(256)]
+LOW_B = [v >> 3 for v in range(256)]
+HIGH_R = [(v >> 3) << 3 for v in range(256)]
+HIGH_G = [v >> 5 for v in range(256)]
+
+
+def to_rgb565(img):
+    """Little-endian RGB565 with Pillow alone: the feed's Pillow has no 16-bit packer and there is no numpy."""
+    r, g, b = img.convert("RGB").split()
+    low = ImageChops.add(g.point(LOW_G), b.point(LOW_B))
+    high = ImageChops.add(r.point(HIGH_R), g.point(HIGH_G))
+    return Image.merge("LA", (low, high)).tobytes()
 
 
 class PagerDisplay(FramebufferDisplay):

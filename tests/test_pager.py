@@ -205,3 +205,13 @@ def test_install_swaps_in_the_pager_parts():
     result = subprocess.run([sys.executable, "-c", code], cwd=str(ROOT / "payload" / "quartermaster"),
                             capture_output=True, text=True, env={"QUARTERMASTER_HOME": "/tmp/qm-test", "PATH": "/usr/bin:/bin"})
     assert result.stdout.strip() == "ok", result.stderr
+
+
+def test_screen_bytes_are_little_endian_rgb565_without_numpy():
+    from PIL import Image
+    from qmpager import screen
+    img = Image.new("RGB", (2, 1))
+    img.putdata([(255, 0, 0), (0x12, 0x34, 0x56)])
+    data = screen.to_rgb565(img)
+    expected = [0xF800, (0x12 >> 3) << 11 | (0x34 >> 2) << 5 | 0x56 >> 3]
+    assert data == struct.pack("<2H", *expected)

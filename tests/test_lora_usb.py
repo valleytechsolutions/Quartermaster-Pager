@@ -8,6 +8,8 @@ sys.path.insert(0, str(ROOT / "payload" / "quartermaster"))
 from quartermaster import hardware, lora, meshpackets  # noqa: E402
 from qmpager import aes, ch341, ed25519, meshapi, usblora  # noqa: E402
 
+meshpackets._aes_ctr = aes.ctr
+
 
 class FakeStick:
     """A CH341 with an SX1262 behind it that answers as one in LoRa mode."""
