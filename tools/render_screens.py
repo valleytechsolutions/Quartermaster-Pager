@@ -44,8 +44,9 @@ def main():
     from quartermaster import wigle
     from quartermaster import lora
     from quartermaster.ui import screens
-    from qmpager import __main__ as pager, biscuit, biscuit_screen, listen, usblora, wide
+    from qmpager import __main__ as pager, biscuit, biscuit_screen, listen, sky_tile, usblora, wide
     biscuit_screen.install()
+    sky_tile.install()
     wigle.DISPLAY_SIZES["pager"] = "480x222"
     screens.Hardware.lora_card = staticmethod(pager.lora_card)
     listen.present = lambda *a, **k: True

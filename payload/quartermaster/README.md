@@ -18,7 +18,11 @@ and controls made for the D-pad and the two buttons.
   - A Meshtastic board on USB (Heltec, LilyGO, RAK4631 and others) is read through its own firmware. Nothing is sent
     and no setting is changed.
 - **USB Wi-Fi adapters** plugged into the Pager (through a hub) wardrive too, as on the CardputerZero.
-- **GPS** from a USB GPS or from `gpsd`.
+- **GPS** from a USB GPS, set up by itself. When the Pager's GPS setting does not hear one, Quartermaster tries each
+  USB serial port at the usual speeds through the Pager's own GPS setup, as picking it under Settings > GPS would.
+  The Pager's status bar shows that GPS too.
+- **ADS-B aircraft** on a tile of their own, from an RTL-SDR stick. The first time a stick is plugged in, Quartermaster
+  asks to install `rtl-sdr` from the Pager's package feed.
 - **WiGLE CSV logs** in `/root/loot/quartermaster`, with uploads to WiGLE, WDGWars and Wardrift.
 - **Drive Alerts** for Flock cameras, Axon body cameras, Meta glasses and more, with buzzer tones and vibration.
 - **Recon** of nearby Wi-Fi and Bluetooth devices, with the lists from SquachWatch.
@@ -30,7 +34,8 @@ and controls made for the D-pad and the two buttons.
 1. Copy this folder to `/root/payloads/user/reconnaissance/quartermaster/` on the Pager.
 2. Open **Payloads > Reconnaissance > Quartermaster** on the Pager.
 3. The first time, Quartermaster asks to install `python3`, `python3-pillow` and `python3-pyserial` from the Pager's
-   package feed to its storage (`opkg -d mmc`). The Pager needs internet for this. Nothing else is downloaded.
+   package feed to its storage (`opkg -d mmc`). The Pager needs internet for this. With an RTL-SDR stick plugged in,
+   it also asks to install `rtl-sdr`. Nothing else is downloaded.
 
 ## Controls
 

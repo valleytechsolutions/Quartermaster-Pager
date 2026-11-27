@@ -2,7 +2,7 @@
 # Title: Quartermaster
 # Author: Valleytech Solutions
 # Description: Wi-Fi, Bluetooth and LoRa mesh wardriver with WiGLE logs, uploads, Drive Alerts for Flock, Axon and Meta glasses, Recon, and Biscuit 6 GHz node mode
-# Version: 1.1.1
+# Version: 1.1.2
 # Category: Reconnaissance
 #
 # Options: none needed. Upload keys are entered on the Pager or from a phone, never in this file.
@@ -53,6 +53,31 @@ install_packages() {
     ready
 }
 
+rtl_sdr_plugged() {
+    for node in /sys/bus/usb/devices/*; do
+        case "$(cat "$node/idVendor" 2>/dev/null):$(cat "$node/idProduct" 2>/dev/null)" in
+            0bda:2838|0bda:2832) return 0 ;;
+        esac
+    done
+    return 1
+}
+
+offer_rtl_sdr() {
+    rtl_sdr_plugged || return 0
+    command -v rtl_adsb >/dev/null 2>&1 && return 0
+    [ -f "$QUARTERMASTER_HOME/.no-rtl-sdr" ] && return 0
+    response=$(CONFIRMATION_DIALOG "An RTL-SDR stick is plugged in.\n\nInstall rtl-sdr to the Pager's storage so the ADS-B tile can show aircraft?\n\nThis needs internet access.")
+    if [ "$response" != "$DUCKYSCRIPT_USER_CONFIRMED" ]; then
+        touch "$QUARTERMASTER_HOME/.no-rtl-sdr"
+        return 0
+    fi
+    SPINNER=$(START_SPINNER "Installing rtl-sdr...")
+    opkg update >"$LOG_FILE" 2>&1
+    opkg -d mmc install rtl-sdr >>"$LOG_FILE" 2>&1
+    STOP_SPINNER "$SPINNER"
+    command -v rtl_adsb >/dev/null 2>&1 || ERROR_DIALOG "rtl-sdr could not be installed. See $LOG_FILE"
+}
+
 cleanup() {
     if [ -n "$QM_PID" ]; then
         kill "$QM_PID" 2>/dev/null
@@ -94,6 +119,7 @@ if ! ready; then
 fi
 
 mkdir -p "$QUARTERMASTER_HOME"
+offer_rtl_sdr
 UI_TAKEOVER >/dev/null 2>&1 || { ERROR_DIALOG "Could not take over the Pager screen."; exit 1; }
 DISPLAY_SET=1
 "$PYTHON_BIN" -m qmpager >"$LOG_FILE" 2>&1 &
