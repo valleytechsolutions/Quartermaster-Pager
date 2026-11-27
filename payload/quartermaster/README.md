@@ -66,7 +66,7 @@ The **Biscuit** tile on the menu makes the Pager a 6 GHz node for a Biscuit or B
 everything with its own GPS; the Pager adds the 6 GHz band.
 
 1. On the Biscuit, set node mode to **Extended**. Secure node mode does not take Pager nodes, and the Biscuit needs
-   firmware that takes 6 GHz nodes.
+   firmware v1.7.0 or newer, the release that added Pager nodes.
 2. On the Pager, open **Biscuit** and press green. Biscuits that answer are listed. Pick yours with the D-pad and
    press green to pair. The Pager remembers it.
 3. Node mode starts by itself after pairing. Next time, open **Biscuit** and press green to start it.
