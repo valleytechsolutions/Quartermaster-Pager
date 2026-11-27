@@ -1,3 +1,3 @@
 """Quartermaster on the Hak5 WiFi Pineapple Pager."""
 
-PAGER_VERSION = "0.1.0"
+PAGER_VERSION = "1.0.0"

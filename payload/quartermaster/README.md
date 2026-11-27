@@ -4,7 +4,7 @@ Wardrive Wi-Fi, Bluetooth and LoRa mesh nodes from the Pager, with WiGLE logs, u
 It is the same Quartermaster that runs on the M5Stack CardputerZero, with screens drawn for the Pager's wide display
 and controls made for the D-pad and the two buttons.
 
-![Wardrive](https://raw.githubusercontent.com/valleytechsolutions/Quartermaster-Pager/main/docs/screens/wardrive.png)
+![Wardrive](screenshot.png)
 
 ## What it does
 
